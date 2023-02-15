@@ -10,6 +10,8 @@
 #include <QtGui/QGuiApplication>
 #include <QtQml/QQmlApplicationEngine>
 
+#include "cxx-qt-gen/my_object.cxxqt.h"
+
 int
 main(int argc, char* argv[])
 {
@@ -29,6 +31,8 @@ main(int argc, char* argv[])
         QCoreApplication::exit(-1);
     },
     Qt::QueuedConnection);
+
+  qmlRegisterType<MyObject>("com.kdab.cxx_qt.demo", 1, 0, "MyObject");
 
   engine.load(url);
 

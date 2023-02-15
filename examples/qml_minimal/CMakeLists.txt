@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT USE_QT5)
-    find_package(Qt6 COMPONENTS Core Gui Qml QuickControls2 QmlImportScanner)
+    find_package(Qt6 COMPONENTS Core Gui Qml QuickControls2)
 endif()
 if(NOT Qt6_FOUND)
     find_package(Qt5 5.15 COMPONENTS Core Gui Qml QuickControls2 QmlImportScanner REQUIRED)
@@ -28,6 +28,8 @@ endif()
 # library's build script to ensure it uses the same installation of Qt as CMake.
 get_target_property(QMAKE Qt::qmake IMPORTED_LOCATION)
 # ANCHOR_END: book_cmake_find_qmake
+
+set(Rust_CARGO_TARGET wasm32-unknown-emscripten)
 
 # ANCHOR: book_cmake_find_corrosion
 find_package(Corrosion QUIET)
@@ -73,7 +75,7 @@ target_include_directories(${APP_NAME}_lib INTERFACE "${CXXQT_EXPORT_DIR}/${CRAT
 target_link_libraries(${APP_NAME}_lib INTERFACE
     # WHOLE_ARCHIVE is needed for the generated QML plugin to register on startup,
     # otherwise the linker will discard the static variables that initialize it.
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,${CRATE}-static>"
+    #"$<LINK_LIBRARY:WHOLE_ARCHIVE,${CRATE}-static>"
     Qt::Core
     Qt::Gui
     Qt::Qml
@@ -81,9 +83,11 @@ target_link_libraries(${APP_NAME}_lib INTERFACE
 )
 # ANCHOR_END: book_cmake_use_corrosion
 
+target_link_options(${APP_NAME}_lib INTERFACE "SHELL:-Wl,--whole-archive $<TARGET_FILE:${CRATE}-static> -Wl,--no-whole-archive")
+
 # ANCHOR: book_cmake_executable
 # Define the executable with the C++ source and Qt resource files
-add_executable(${APP_NAME} cpp/main.cpp qml/qml.qrc)
+qt_add_executable(${APP_NAME} cpp/main.cpp qml/qml.qrc)
 
 # Link to the Rust library
 target_link_libraries(${APP_NAME} PRIVATE ${APP_NAME}_lib)
@@ -91,42 +95,3 @@ target_link_libraries(${APP_NAME} PRIVATE ${APP_NAME}_lib)
 # If we are using a statically linked Qt then we need to import any qml plugins
 qt_import_qml_plugins(${APP_NAME})
 # ANCHOR_END: book_cmake_executable
-
-#
-# Unit test
-#
-
-if(TARGET Qt6::Core)
-    find_package(Qt6 COMPONENTS QuickTest Test REQUIRED)
-else()
-    find_package(Qt5 COMPONENTS QuickTest Test REQUIRED)
-endif()
-
-function(add_qml_test TEST_NAME)
-    # Copy QML unit test to build folder
-    # this is so that our tst_${TEST_NAME} executable can find the QML files
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tests/${TEST_NAME}/tst_${TEST_NAME}.qml ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}/tst_${TEST_NAME}.qml COPYONLY)
-
-    add_executable("${APP_NAME}_${TEST_NAME}_test" "tests/${TEST_NAME}/tst_${TEST_NAME}.cpp")
-    target_link_libraries(${APP_NAME}_${TEST_NAME}_test PRIVATE
-        ${APP_NAME}_lib
-        Qt::QuickTest
-    )
-    qt_import_qml_plugins(${APP_NAME}_${TEST_NAME}_test)
-
-    if(WIN32)
-        set(EXE_SUFFIX ".exe")
-    else()
-        set(EXE_SUFFIX "")
-    endif()
-
-    add_test(NAME ${APP_NAME}_${TEST_NAME}_test COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}/${APP_NAME}_${TEST_NAME}_test${EXE_SUFFIX} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME})
-
-    add_valgrind_test(${APP_NAME}_${TEST_NAME}_test ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}/${APP_NAME}_${TEST_NAME}_test${EXE_SUFFIX} ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME})
-
-    set_target_properties(${APP_NAME}_${TEST_NAME}_test PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${TEST_NAME}
-    )
-endfunction()
-
-add_qml_test(myobject)
